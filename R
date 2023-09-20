@@ -1,0 +1,218 @@
+Appendix A: R Code Used for Analysis
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(ISLR)
+library(MASS)
+library(class)
+library(adabag)
+library(rpart)
+
+#loading the data
+data1=read.csv("responses.csv",header=T,na.strings = "")
+data1=data1[,4:15]
+data2=read.csv("COVID-19 Survey Student Responses.csv",header=T,na.strings = "")
+data2<-subset(data2,data2$Rating.of.Online.Class.experience!="NA")
+data2=data2[complete.cases(data2),]
+
+hist(data1$Before.ClassworkStress,xlab = "Stree level",ylab="number of students",main="Classwork Stress before Covid-19")
+hist(data1$Now.ClassworkStress,xlab = "Stree level",ylab="number of students",main="Classwork Stress during Covid-19")
+
+hist(data1$Before.HomeworkStress,xlab = "Stree level",ylab="number of students",main="Homework Stress before Covid-19")
+hist(data1$Now.HomeworkStress,xlab = "Stree level",ylab="number of students",main="Homework Stress during Covid-19")
+
+hist(data1$Before.HomeworkHours,xlab = "Hours",ylab="number of students",main="Homework Hour before Covid-19")
+hist(data1$Now.HomeworkHours,xlab = "Hours",ylab="number of students", main="Homework Hour during Covid-19")
+
+hist(data1$FamilyRelationships,xlab = "relationship level",ylab="number of students",main="Famliyrelationship level")
+
+hist(data1$FriendRelationships,xlab = "relationship level",ylab="number of students", main="Fridendrelationship level")
+
+
+beforeenv = table(data1$Before.Environment)
+piepercent<-paste(round(100*beforeenv/sum(beforeenv),2),"%")
+pie(beforeenv, labels=piepercent, main ="Study Environment before Covid-19",col=c("black","white","gray"))
+legend("topleft",legend = c("Hybrid","Physical","Virtual"),cex = 0.6,fill=c("black","white","gray"))
+Nowenv = table(data1$Now.Environment)
+piepercent<-paste(round(100*Nowenv/sum(Nowenv),2),"%")
+pie(Nowenv, labels=piepercent, main ="Study Environment during Covid-19",col=c("black","white","gray"))
+legend("topleft",legend = c("Hybrid","Physical","Virtual"),cex = 0.6,fill=c("black","white","gray"))
+
+
+#data2
+hist(data2$Time.spent.on.Online.Class,xlab="Hours",ylab = "number of students",main="Online Class Time")
+
+onlineexp = table(data2$Rating.of.Online.Class.experience)
+piepercent<-paste(round(100*onlineexp/sum(onlineexp),2),"%")
+pie(onlineexp,labels=piepercent,main="online class experience",col=rainbow(length(onlineexp)))
+legend("topleft",legend=c("Average","Excellent","Good","Poor","Very poor"),cex=0.6,fill=rainbow(length(onlineexp)))
+
+exp<-ggplot(data2,aes(Rating.of.Online.Class.experience,
+                      fill=Rating.of.Online.Class.experience))
+exp+geom_bar()+guides(fill="none")
+
+time.exp<-ggplot(data2,aes(Rating.of.Online.Class.experience,Time.spent.on.Online.Class,
+                           col=Rating.of.Online.Class.experience))
+time.exp+geom_point()+guides(col="none")
+
+hist(data2$Time.spent.on.self.study,xlab="Hours",ylab = "number of students",main="Time spent on self study")
+hist(data2$Time.spent.on.fitness,xlab="Hours",ylab = "number of students",main="Time spent on fitness")
+hist(data2$Time.spent.on.sleep,xlab="Hours",ylab = "number of students",main="Time spent on sleep")
+hist(data2$Time.spent.on.social.media,xlab="Hours",ylab = "number of students",main="Time spent on social media")
+
+
+##
+ts = table(data2$Time.utilized)
+piepercent<-paste(round(100*ts/sum(ts),2),"%")
+pie(ts,labels=piepercent,main="Time Utilized",col=c("grey","white"))
+legend("topleft",legend=c("NO","YES"),cex=0.6,fill=c("grey","white"))
+
+ts1<-ggplot(data2,aes(Time.utilized,fill=Time.utilized))
+ts1+geom_bar()+guides(fill="none")
+##
+
+p1<-ggplot(data2,aes(Time.utilized,Time.spent.on.social.media,col=Time.utilized))
+p1+geom_point()
+##############
+colnames(data2)
+data2=data2[,c(7,8,9,10,18)]
+data2<-mutate(data2, closewithother=Do.you.find.yourself.more.connected.with.your.family..close.friends...relatives...)
+
+b<-sub("NO","0",data2$closewithother)
+data2$closewithother<- b
+a<-sub("YES","1",data2$closewithother)
+data2$closewithother<-a
+data2$closewithother<-as.numeric(data2$closewithother)
+
+colnames(data2)
+
+trainingRows=sample(1:nrow(data2), 0.6*nrow(data2))
+training2=data2[trainingRows, ]
+test2=data2[-trainingRows, ]
+
+data2lm=lm(formula = closewithother~Time.spent.on.self.study+
+             Time.spent.on.fitness+Time.spent.on.social.media,data = data2)
+summary(data2lm)
+
+
+data2glm=glm(formula = closewithother~Time.spent.on.self.study+
+               Time.spent.on.fitness+Time.spent.on.social.media,data = data2)
+summary(data2glm)
+
+data2glm2=glm(formula = closewithother~Time.spent.on.social.media,data = data2)
+prob=predict(data2glm2,newdata = test2, type="response")
+pred<-ifelse(prob>=0.5,"1","0")
+pred<-factor(pred,levels=c("0","1"),order=TRUE)
+mean(pred==test2[,"closewithother"])
+
+
+
+
+data2lda<-lda(Do.you.find.yourself.more.connected.with.your.family..close.friends...relatives...~Time.spent.on.social.media,
+              data = training2)
+data2lda
+ldapred2=predict(data2lda,newdata=test2,type="response")
+ldaclass2=ldapred2$class
+table(ldaclass2,test2$Do.you.find.yourself.more.connected.with.your.family..close.friends...relatives...)
+mean(ldaclass2==test2$Do.you.find.yourself.more.connected.with.your.family..close.friends...relatives...)
+
+
+data2qda<-qda(Do.you.find.yourself.more.connected.with.your.family..close.friends...relatives...~Time.spent.on.social.media,
+              data = training2)
+data2qda
+qdapred2=predict(data2qda,newdata=test2,type="response")
+qdaclass2=qdapred2$class
+table(qdaclass2,test2$Do.you.find.yourself.more.connected.with.your.family..close.friends...relatives...)
+mean(qdaclass2==test2$Do.you.find.yourself.more.connected.with.your.family..close.friends...relatives...)
+
+
+set.seed(1)
+train.X2 = cbind(training2$Time.spent.on.social.media)
+test.X2 = cbind(test2$Time.spent.on.social.media)
+train.Y2 = cbind(training2$Do.you.find.yourself.more.connected.with.your.family..close.friends...relatives...)
+knnpred = knn(train.X2, test.X2, train.Y2, k=1)
+table(knnpred, test2$Do.you.find.yourself.more.connected.with.your.family..close.friends...relatives...)
+mean(knnpred==test2$Do.you.find.yourself.more.connected.with.your.family..close.friends...relatives...)
+
+
+
+training2$closewithother<-as.factor(training2$closewithother)
+test2$closewithother<-as.factor(test2$closewithother)
+data2bagging=bagging(closewithother~Time.spent.on.social.media,
+                     data = training2)
+bagp=predict.bagging(data2bagging,newdata = test2)
+bagp$confusion
+accuracy.rate=1-bagp$error
+accuracy.rate
+##############
+colnames(data1)
+
+newdata1<-mutate(data1, ClassworkStressChange=Now.ClassworkStress-Before.ClassworkStress,
+                 HomeworkStressChange=Now.HomeworkStress-Before.HomeworkStress,
+                 HomeworkHoursChange=Now.HomeworkHours-Before.HomeworkHours,
+                 FriendRelationships1=FriendRelationships)
+
+newdata1$FriendRelationships1[newdata1$FriendRelationships1>=0]<- 1
+newdata1$FriendRelationships1[newdata1$FriendRelationships1<0]<- 0
+b1<-sub("0","NO",newdata1$FriendRelationships1)
+newdata1$FriendRelationships1<- b1
+a1<-sub("1","YES",newdata1$FriendRelationships1)
+newdata1$FriendRelationships1<- a1
+newdata1=newdata1[,c(4,5,6,8,9,10,12,13,14,15,16)]
+colnames(newdata1)
+
+lmfit=lm(formula = FriendRelationships~Before.ClassworkStress+Before.HomeworkStress+
+           Before.HomeworkHours+Now.ClassworkStress+Now.HomeworkStress+
+           Now.HomeworkHours,data = newdata1)
+summary(lmfit)
+
+lmfit2=lm(formula = FriendRelationships~ClassworkStressChange+HomeworkStressChange+
+            HomeworkHoursChange,data = newdata1)
+summary(lmfit2)
+
+lmfit2=glm(formula = FriendRelationships1~ClassworkStressChange+HomeworkStressChange+
+             HomeworkHoursChange,data = newdata1)
+summary(lmfit2)
+
+
+trainingRows=sample(1:nrow(newdata1), 0.6*nrow(newdata1))
+training=newdata1[trainingRows, ]
+test=newdata1[-trainingRows, ]
+
+
+
+data1lda2<-lda(FriendRelationships1~ClassworkStressChange + HomeworkStressChange,data=training)
+data1lda2
+lda2pred = predict(data1lda2, newdata=test, type="response")
+lda2class = lda2pred$class
+table(lda2class,test$FriendRelationships)
+mean(lda2class==test$FriendRelationships)
+
+
+
+data1qda2<-qda(FriendRelationships1~ClassworkStressChange + HomeworkStressChange,data=training)
+data1qda2
+qdapred = predict(data1qda2, newdata=test, type="response")
+qdaclass = qdapred$class
+table(qdaclass,test$FriendRelationships)
+mean(qdaclass==test$FriendRelationships)
+
+
+set.seed(1)
+train.X = cbind(training$ClassworkStressChange)
+test.X = cbind(test$ClassworkStressChange)
+train.Y = cbind(training$FriendRelationships)
+knnpred = knn(train.X, test.X, train.Y, k=1)
+table(knnpred, test$FriendRelationships1)
+mean(knnpred==test$FriendRelationships1)
+
+set.seed(1)
+train.X = cbind(training$HomeworkStressChange)
+test.X = cbind(test$HomeworkStressChange)
+train.Y = cbind(training$FriendRelationships)
+knnpred = knn(train.X, test.X, train.Y, k=1)
+table(knnpred, test$FriendRelationships1)
+mean(knnpred==test$FriendRelationships1)
+
+
+
